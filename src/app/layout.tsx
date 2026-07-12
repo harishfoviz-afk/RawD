@@ -43,18 +43,18 @@ export default async function RootLayout({
                     DanceHeuristics
                   </span>
                 </Link>
-                <nav className="hidden md:flex items-center gap-6">
+                <nav className="flex items-center gap-4 text-xs sm:text-sm md:gap-6">
                   <Link
                     href="/"
-                    className="text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                    className="text-gray-400 hover:text-white transition-colors"
                   >
                     Register
                   </Link>
                   <Link
                     href="/peer-ballot"
-                    className="text-sm font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+                    className="text-gray-400 hover:text-white transition-colors flex items-center gap-1"
                   >
-                    <Award className="h-4 w-4 text-brand-purple" />
+                    <Award className="h-3.5 w-3.5 text-brand-purple" />
                     Peer Ballot
                   </Link>
                 </nav>

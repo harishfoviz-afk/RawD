@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #07050f;
+  --color-foreground: #f3f4f6;
+  
+  --color-brand-dark: #07050f;
+  --color-brand-card: #130f26;
+  --color-brand-purple: #8b5cf6;
+  --color-brand-purple-hover: #a78bfa;
+  --color-brand-cyan: #06b6d4;
+  --color-brand-emerald: #10b981;
+  --color-brand-amber: #f59e0b;
+  --color-brand-neongreen: #39ff14;
+  --color-brand-neongreen-hover: #76ff54;
+  
+  --font-sans: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --background: #07050f;
+  --foreground: #f3f4f6;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism panel */
+.glass-panel {
+  background: rgba(22, 18, 44, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.glass-panel-glow {
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.15);
+}
+
+/* Gradient text */
+.text-gradient-purple-cyan {
+  background: linear-gradient(135deg, #a78bfa 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-emerald-cyan {
+  background: linear-gradient(135deg, #34d399 0%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Dynamic glowing border */
+.glow-border-hover:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+  transition: all 0.3s ease;
+}
+
+/* Pulse animation for AI processing */
+@keyframes cyber-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(0.98);
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
+  }
+}
+
+.ai-pulse {
+  animation: cyber-pulse 2s infinite ease-in-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #07050f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f1a3e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8b5cf6;
+}

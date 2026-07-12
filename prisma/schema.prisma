@@ -1,0 +1,83 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Contestant {
+  id                String       @id @default(cuid())
+  name              String
+  email             String       @unique
+  phone             String
+  city              String
+  videoUrl          String
+  publicVotingSlug  String       @unique
+  status            String       @default("PENDING_AI") // PENDING_AI, PROCESSING, READY, FAILED_AI
+  styleTag          String       // BOLLYWOOD, FOLK_TEMPO, CLASSICAL, STREET, FLUID
+  originalVideoUrl  String?
+  isAiGenerated     Boolean      @default(false)
+  isTop16           Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  aiScorecard       AIScorecard?
+  votes             PublicVote[]
+  peerBallots       PeerBallot[]
+}
+
+model AIScorecard {
+  contestantId    String      @id
+  styleGroup      String      // SHARP, FLUID, TRACK_INTENSE
+  sharpnessScore  Float
+  alignmentScore  Float
+  timingScore     Float
+  stabilityScore  Float
+  overallScore    Float
+  feedbackSummary String
+  updatedAt       DateTime    @updatedAt
+
+  contestant      Contestant  @relation(fields: [contestantId], references: [id], onDelete: Cascade)
+}
+
+model PublicVote {
+  id              String      @id @default(cuid())
+  contestantId    String
+  voterIp         String
+  type            String      @default("WA_ANONYMOUS") // WA_ANONYMOUS, OAUTH_VERIFIED, SOCIAL_SYNC
+  weight          Float       @default(1.0)
+  voterIdentifier String?     // Stores OAuth email/account identifier
+  createdAt       DateTime    @default(now())
+
+  contestant   Contestant  @relation(fields: [contestantId], references: [id], onDelete: Cascade)
+
+  @@unique([contestantId, voterIdentifier]) // Prevent double voting by the same OAuth user/likes key
+}
+
+model PeerBallot {
+  id                 String      @id @default(cuid())
+  targetContestantId String
+  evaluatorPeerId    String      // The admin-issued peer evaluator token/ID
+  musicalityScore    String      // MCQ: Flawless, Steady, Out of Sync
+  executionScore     String      // MCQ: Pristine Lines, Minor Slips, Restricted
+  energyScore        String      // MCQ: Explosive, Moderate, Lacking Stamina
+  presenceScore      Float       // 1-10 presence score
+  compiledPeerScore  Float       // Dynamically calculated technical rating
+  submittedAt        DateTime    @default(now())
+
+  contestant         Contestant  @relation(fields: [targetContestantId], references: [id], onDelete: Cascade)
+
+  @@unique([targetContestantId, evaluatorPeerId]) // A peer cannot submit multiple ballots for the same contestant
+}
+
+model AccessCode {
+  code      String   @id
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+}

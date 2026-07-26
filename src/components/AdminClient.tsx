@@ -78,6 +78,8 @@ export default function AdminClient({ initialCompetitors, initialCodes, initialC
   const [leagueName, setLeagueName] = useState(configMap.get("LEAGUE_NAME") || "Season 1 Arena");
   const [leagueDesc, setLeagueDesc] = useState(configMap.get("LEAGUE_DESC") || "Standard League active for voting.");
   const [leagueLaunched, setLeagueLaunched] = useState(configMap.get("LEAGUE_LAUNCHED") === "true");
+  const [supabaseUrl, setSupabaseUrl] = useState(configMap.get("SUPABASE_URL") || "");
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState(configMap.get("SUPABASE_ANON_KEY") || "");
 
   // Token Form State
   const [newToken, setNewToken] = useState("");
@@ -168,18 +170,22 @@ export default function AdminClient({ initialCompetitors, initialCodes, initialC
       await saveSystemConfig("WEIGHT_WA_ANONYMOUS", weightWA);
       await saveSystemConfig("WEIGHT_OAUTH_VERIFIED", weightPortal);
       await saveSystemConfig("WEIGHT_SOCIAL_SYNC", weightSocial);
+      await saveSystemConfig("SUPABASE_URL", supabaseUrl);
+      await saveSystemConfig("SUPABASE_ANON_KEY", supabaseAnonKey);
       
       // Update local configs state
       setConfigs([
         { key: "WEIGHT_WA_ANONYMOUS", value: weightWA },
         { key: "WEIGHT_OAUTH_VERIFIED", value: weightPortal },
         { key: "WEIGHT_SOCIAL_SYNC", value: weightSocial },
+        { key: "SUPABASE_URL", value: supabaseUrl },
+        { key: "SUPABASE_ANON_KEY", value: supabaseAnonKey },
         { key: "LEAGUE_LAUNCHED", value: leagueLaunched ? "true" : "false" },
         { key: "LEAGUE_NAME", value: leagueName },
         { key: "LEAGUE_DESC", value: leagueDesc }
       ]);
       await refreshData();
-      alert("System multipliers saved successfully!");
+      alert("System configurations saved successfully!");
     });
   };
 
@@ -561,6 +567,42 @@ export default function AdminClient({ initialCompetitors, initialCodes, initialC
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Supabase API Configuration */}
+          <div className="glass-panel rounded-2xl p-6 border border-purple-500/10 space-y-6 md:col-span-2">
+            <div>
+              <h3 className="text-base font-bold text-white">Supabase Storage Configuration</h3>
+              <p className="text-xs text-gray-400 mt-1">Configure your Supabase Project URL and Published API Key (Anon Key) to enable video uploads directly to Supabase Storage.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Supabase Project URL</label>
+                <input
+                  type="text"
+                  placeholder="https://your-project-ref.supabase.co"
+                  value={supabaseUrl}
+                  onChange={(e) => setSupabaseUrl(e.target.value)}
+                  className="w-full bg-brand-dark/50 border border-purple-500/15 focus:border-brand-purple/40 rounded-xl px-4 py-2 text-xs text-white outline-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Supabase Anon Key</label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOi..."
+                  value={supabaseAnonKey}
+                  onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                  className="w-full bg-brand-dark/50 border border-purple-500/15 focus:border-brand-purple/40 rounded-xl px-4 py-2 text-xs text-white outline-none"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleSaveConfigs}
+              className="bg-brand-cyan hover:bg-brand-cyan/85 text-black rounded-xl px-6 py-2.5 text-xs font-bold transition-colors cursor-pointer"
+            >
+              Save Supabase Settings
+            </button>
           </div>
         </div>
       )}

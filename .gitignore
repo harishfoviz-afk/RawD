@@ -65,3 +65,7 @@ MANIFEST
 # process uploads / local temporary files
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# Do not ignore Next.js source lib folder
+!/src/lib/
+

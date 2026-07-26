@@ -92,7 +92,8 @@ export async function POST(req: NextRequest) {
         const mockPeaks = [0.6, 1.4, 2.2, 2.9, 3.7, 4.4, 5.2, 6.0, 6.7, 7.5, 8.2, 9.0];
         formData.append("kinetic_peaks_json", JSON.stringify(mockPeaks));
 
-        const pythonResponse = await fetch("http://127.0.0.1:8000/analyze", {
+        const pythonAnalysisUrl = process.env.PYTHON_ANALYSIS_URL || "http://127.0.0.1:8000";
+        const pythonResponse = await fetch(`${pythonAnalysisUrl}/analyze`, {
           method: "POST",
           body: formData,
         });

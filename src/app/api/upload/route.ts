@@ -1,6 +1,5 @@
 // src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/db";
 import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: NextRequest) {
@@ -12,12 +11,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "No file uploaded" }, { status: 400 });
     }
 
-    // Retrieve Supabase credentials from database configuration
-    const urlResult: any = await supabase.from("SystemConfig").select("value").eq("key", "SUPABASE_URL").maybeSingle();
-    const keyResult: any = await supabase.from("SystemConfig").select("value").eq("key", "SUPABASE_ANON_KEY").maybeSingle();
-
-    const supabaseUrl = urlResult.data?.value || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const supabaseAnonKey = keyResult.data?.value || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error("[upload] Supabase configuration is missing. Please configure it in the Admin Cockpit settings.");

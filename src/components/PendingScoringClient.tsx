@@ -64,42 +64,28 @@ export default function PendingScoringClient({ slug, initialStatus, name }: Pend
     };
   }, [slug]);
 
+  const displayStatus = status === "PENDING_AI" ? "PENDING" : status;
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto my-12 space-y-8">
       {/* Pulsing wireframe dancer icon */}
       <div className="relative h-64 w-64 rounded-full border border-purple-500/10 flex items-center justify-center bg-brand-dark/20 backdrop-blur-sm overflow-hidden group">
         <span className="absolute inset-0 bg-gradient-to-tr from-brand-purple/10 to-brand-cyan/10 animate-pulse pointer-events-none"></span>
 
-        {/* Custom SVG dancer wireframe outline with pulsing glow */}
-        <svg viewBox="0 0 100 100" className="h-44 w-44 text-brand-purple-hover animate-pulse">
-          {/* Spine */}
-          <line x1="50" y1="30" x2="50" y2="60" stroke="currentColor" strokeWidth="2" strokeDasharray="3" />
-          {/* Shoulders */}
-          <line x1="35" y1="35" x2="65" y2="35" stroke="currentColor" strokeWidth="2.5" />
-          {/* Left Arm */}
-          <line x1="35" y1="35" x2="20" y2="20" stroke="currentColor" strokeWidth="2" />
-          <line x1="20" y1="20" x2="10" y2="35" stroke="currentColor" strokeWidth="1.5" />
-          {/* Right Arm */}
-          <line x1="65" y1="35" x2="80" y2="25" stroke="currentColor" strokeWidth="2" />
-          <line x1="80" y1="25" x2="90" y2="10" stroke="currentColor" strokeWidth="1.5" />
-          {/* Hips */}
-          <line x1="42" y1="60" x2="58" y2="60" stroke="currentColor" strokeWidth="2.5" />
-          {/* Left Leg */}
-          <line x1="42" y1="60" x2="35" y2="80" stroke="currentColor" strokeWidth="2" />
-          <line x1="35" y1="80" x2="45" y2="95" stroke="currentColor" strokeWidth="1.5" />
-          {/* Right Leg */}
-          <line x1="58" y1="60" x2="68" y2="78" stroke="currentColor" strokeWidth="2" />
-          <line x1="68" y1="78" x2="60" y2="92" stroke="currentColor" strokeWidth="1.5" />
-          {/* Joint Landmarks */}
-          <circle cx="50" cy="24" r="5" fill="currentColor" className="text-brand-cyan" />
-          <circle cx="35" cy="35" r="3" fill="currentColor" className="text-brand-cyan" />
-          <circle cx="65" cy="35" r="3" fill="currentColor" className="text-brand-cyan" />
-          <circle cx="20" cy="20" r="2.5" fill="currentColor" className="text-brand-purple" />
-          <circle cx="80" cy="25" r="2.5" fill="currentColor" className="text-brand-purple" />
-          <circle cx="42" cy="60" r="3" fill="currentColor" className="text-brand-cyan" />
-          <circle cx="58" cy="60" r="3" fill="currentColor" className="text-brand-cyan" />
-          <circle cx="35" cy="80" r="2.5" fill="currentColor" className="text-brand-purple" />
-          <circle cx="68" cy="78" r="2.5" fill="currentColor" className="text-brand-purple" />
+        {/* Custom fluid dancer pose SVG */}
+        <svg viewBox="0 0 100 100" className="h-44 w-44 text-brand-purple-hover animate-pulse" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          {/* Head */}
+          <circle cx="50" cy="20" r="5" fill="currentColor" className="text-brand-cyan" />
+          {/* Body/Spine curve */}
+          <path d="M50 25 C47 38, 52 48, 45 62" />
+          {/* Left Arm raised fluidly */}
+          <path d="M48 30 C30 25, 23 15, 18 28" />
+          {/* Right Arm extended dynamically */}
+          <path d="M52 30 C65 35, 75 22, 85 28" />
+          {/* Left Leg bent in a dance pose */}
+          <path d="M45 62 C33 70, 30 80, 42 92" />
+          {/* Right Leg extended backward */}
+          <path d="M45 62 C55 68, 68 76, 78 88" strokeWidth="2.5" />
         </svg>
 
         {/* Pulse rings */}
@@ -110,7 +96,7 @@ export default function PendingScoringClient({ slug, initialStatus, name }: Pend
         <div>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-purple/10 border border-brand-purple/20 px-3 py-1 text-xs font-bold text-brand-purple">
             <Activity className="h-3.5 w-3.5 text-brand-cyan animate-pulse" />
-            AI Processing Active
+            Processing Active
           </span>
           <h2 className="text-2xl font-black text-white tracking-tight mt-3">
             Analysing Audition Video: {name}
@@ -118,7 +104,7 @@ export default function PendingScoringClient({ slug, initialStatus, name }: Pend
         </div>
 
         <p className="text-sm text-gray-400 max-w-md mx-auto leading-relaxed">
-          Our AI engine is currently mapping your kinematics and aligning tempo sync. Your public voting lane and scorecard will launch shortly!
+          Our engine is currently mapping your kinematics and aligning tempo sync. Your public voting lane and scorecard will launch shortly!
         </p>
 
         {/* Status Ticker Box */}
@@ -132,7 +118,7 @@ export default function PendingScoringClient({ slug, initialStatus, name }: Pend
 
       <div className="flex items-center gap-1.5 text-[10px] text-gray-500 justify-center">
         <Timer className="h-3.5 w-3.5" />
-        <span>Current status: <span className="font-bold text-brand-purple uppercase">{status}</span> &bull; Checking every 15s</span>
+        <span>Current status: <span className="font-bold text-brand-purple uppercase">{displayStatus}</span> &bull; Checking every 15s</span>
       </div>
     </div>
   );

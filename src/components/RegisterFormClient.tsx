@@ -111,6 +111,14 @@ export default function RegisterFormClient() {
 
       if (result.success && result.contestant) {
         setStatus("success");
+        // Trigger the background scoring worker asynchronously in the background
+        fetch("/api/worker/process", {
+          method: "POST",
+          headers: {
+            "x-admin-secret": "DANCE_HEURISTICS_SECRET_KEY_2026",
+          },
+        }).catch((err) => console.error("Auto trigger worker failed:", err));
+
         // Redirect to voting profile to poll AI progress
         router.push(`/vote/${result.contestant.publicVotingSlug}`);
       } else {

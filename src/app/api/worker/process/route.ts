@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized. Invalid worker token." }, { status: 401 });
     }
 
-    // 2. Query for oldest PENDING_AI candidate
-    const { data: candidate, error: queryError } = await supabase
+    // 2. Query for oldest PENDING_AI candidate, or any candidate in PROCESSING status for more than 1 minute
+    let { data: candidate, error: queryError } = await supabase
       .from("Contestant")
       .select("*")
       .eq("status", "PENDING_AI")
@@ -34,6 +34,22 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (queryError) throw new Error(queryError.message);
+
+    if (!candidate) {
+      // Check if any contestant is stuck in PROCESSING status for more than 1 minute
+      const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+      const { data: stuckCandidate, error: stuckError } = await supabase
+        .from("Contestant")
+        .select("*")
+        .eq("status", "PROCESSING")
+        .lt("updatedAt", oneMinuteAgo)
+        .order("createdAt", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (stuckError) throw new Error(stuckError.message);
+      candidate = stuckCandidate;
+    }
 
     if (!candidate) {
       return NextResponse.json({ success: true, message: "No pending jobs found." });
@@ -47,7 +63,7 @@ export async function POST(req: NextRequest) {
         updatedAt: new Date().toISOString(),
       })
       .eq("id", candidate.id)
-      .eq("status", "PENDING_AI")
+      .in("status", ["PENDING_AI", "PROCESSING"])
       .select();
 
     if (updateError) throw new Error(updateError.message);
@@ -117,29 +133,38 @@ export async function POST(req: NextRequest) {
         formData.append("kinetic_peaks_json", JSON.stringify(mockPeaks));
 
         const pythonAnalysisUrl = process.env.PYTHON_ANALYSIS_URL || "http://127.0.0.1:8000";
-        const pythonResponse = await fetch(`${pythonAnalysisUrl}/analyze`, {
-          method: "POST",
-          body: formData,
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        try {
+          const pythonResponse = await fetch(`${pythonAnalysisUrl}/analyze`, {
+            method: "POST",
+            body: formData,
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-        if (pythonResponse.ok) {
-          const apiResult = await pythonResponse.json();
-          if (apiResult.timing_score) {
-            timingScore = parseFloat(apiResult.timing_score.toFixed(2));
-            console.log(`[worker] Successfully retrieved timing_score from FastAPI: ${timingScore}`);
+          if (pythonResponse.ok) {
+            const apiResult = await pythonResponse.json();
+            if (apiResult.timing_score) {
+              timingScore = parseFloat(apiResult.timing_score.toFixed(2));
+              console.log(`[worker] Successfully retrieved timing_score from FastAPI: ${timingScore}`);
+            }
+            if (apiResult.is_ai_generated) {
+              isAiGeneratedVideo = true;
+              console.log(`[worker] Deepfake check failed: FastAPI identified video as synthetic/AI generated.`);
+            }
+          } else {
+            console.warn("[worker] FastAPI returned error status. Falling back to default timing_score.");
           }
-          if (apiResult.is_ai_generated) {
-            isAiGeneratedVideo = true;
-            console.log(`[worker] Deepfake check failed: FastAPI identified video as synthetic/AI generated.`);
-          }
-        } else {
-          console.warn("[worker] FastAPI returned error status. Falling back to default timing_score.");
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          console.warn("[worker] Librosa microservice fetch aborted or failed. Falling back to simulated scoring. Error:", fetchErr.message || fetchErr);
         }
       } else {
         console.warn(`[worker] Video file not accessible. Using simulated timing_score.`);
       }
-    } catch (err) {
-      console.error("[worker] Error communicating with Librosa microservice:", err);
+    } catch (err) {      console.error("[worker] Error communicating with Librosa microservice:", err);
     }
 
     // 5. Compile final scorecard using prior style weights & feedback

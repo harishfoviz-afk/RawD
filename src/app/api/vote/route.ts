@@ -1,6 +1,6 @@
 // src/app/api/vote/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { headers } from "next/headers";
 
 export async function POST(req: NextRequest) {
@@ -38,30 +38,32 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Missing user email or identifier for verified vote" }, { status: 400 });
       }
 
-      // Check database unique constraint programmatically to return clean message
-      const existing = await prisma.publicVote.findUnique({
-        where: {
-          contestantId_voterIdentifier: {
-            contestantId,
-            voterIdentifier,
-          },
-        },
-      });
+      // Check database unique constraint
+      const { data: existing, error } = await supabase
+        .from("PublicVote")
+        .select("id")
+        .eq("contestantId", contestantId)
+        .eq("voterIdentifier", voterIdentifier)
+        .maybeSingle();
+
+      if (error) throw new Error(error.message);
 
       if (existing) {
         return NextResponse.json({ success: false, error: "You have already cast an authenticated vote for this dancer!" }, { status: 400 });
       }
     } else if (type === "WA_ANONYMOUS") {
-      // In addition to client-side cookie check, add an API IP throttle (1 vote per IP per contestant every 30 minutes)
-      const throttleTime = new Date(Date.now() - 30 * 60 * 1000);
-      const existing = await prisma.publicVote.findFirst({
-        where: {
-          contestantId,
-          voterIp,
-          type: "WA_ANONYMOUS",
-          createdAt: { gte: throttleTime },
-        },
-      });
+      // IP throttle (1 vote per IP per contestant every 30 minutes)
+      const throttleTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: existing, error } = await supabase
+        .from("PublicVote")
+        .select("id")
+        .eq("contestantId", contestantId)
+        .eq("voterIp", voterIp)
+        .eq("type", "WA_ANONYMOUS")
+        .gte("createdAt", throttleTime)
+        .maybeSingle();
+
+      if (error) throw new Error(error.message);
 
       if (existing) {
         return NextResponse.json({ success: false, error: "Duplicate voting detected. Please try again later." }, { status: 429 });
@@ -69,15 +71,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Record the vote
-    const vote = await prisma.publicVote.create({
-      data: {
+    const { data: vote, error: insertError } = await supabase
+      .from("PublicVote")
+      .insert({
         contestantId,
         voterIp,
         type,
         weight,
         voterIdentifier: voterIdentifier || null,
-      },
-    });
+      })
+      .select()
+      .single();
+
+    if (insertError) throw new Error(insertError.message);
 
     return NextResponse.json({ success: true, voteId: vote.id });
   } catch (error: any) {

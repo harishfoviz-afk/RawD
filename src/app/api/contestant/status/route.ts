@@ -1,6 +1,6 @@
 // src/app/api/contestant/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,10 +11,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing slug parameter" }, { status: 400 });
     }
 
-    const contestant = await prisma.contestant.findUnique({
-      where: { publicVotingSlug: slug },
-      select: { status: true },
-    });
+    const { data: contestant, error } = await supabase
+      .from("Contestant")
+      .select("status")
+      .eq("publicVotingSlug", slug)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
 
     if (!contestant) {
       return NextResponse.json({ success: false, error: "Contestant not found" }, { status: 404 });

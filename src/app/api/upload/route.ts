@@ -1,6 +1,6 @@
 // src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: NextRequest) {
@@ -13,11 +13,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Retrieve Supabase credentials from database configuration
-    const urlConfig = await prisma.systemConfig.findUnique({ where: { key: "SUPABASE_URL" } });
-    const keyConfig = await prisma.systemConfig.findUnique({ where: { key: "SUPABASE_ANON_KEY" } });
+    const urlResult: any = await supabase.from("SystemConfig").select("value").eq("key", "SUPABASE_URL").maybeSingle();
+    const keyResult: any = await supabase.from("SystemConfig").select("value").eq("key", "SUPABASE_ANON_KEY").maybeSingle();
 
-    const supabaseUrl = urlConfig?.value || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const supabaseAnonKey = keyConfig?.value || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+    const supabaseUrl = urlResult.data?.value || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const supabaseAnonKey = keyResult.data?.value || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error("[upload] Supabase configuration is missing. Please configure it in the Admin Cockpit settings.");
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Initialize Supabase Client dynamically
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
     const buffer = Buffer.from(await file.arrayBuffer());
     
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const filename = `${Date.now()}-${cleanFileName}.${fileExtension}`;
 
     // Upload to 'auditions' bucket in Supabase storage
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseClient.storage
       .from("auditions")
       .upload(filename, buffer, {
         contentType: file.type,
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get public URL of the uploaded file
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = supabaseClient.storage
       .from("auditions")
       .getPublicUrl(filename);
 

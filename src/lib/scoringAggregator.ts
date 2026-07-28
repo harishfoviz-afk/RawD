@@ -1,5 +1,5 @@
 // src/lib/scoringAggregator.ts
-import { prisma } from "./db";
+import { supabase } from "./db";
 
 export interface AggregatedContestant {
   id: string;
@@ -34,28 +34,32 @@ export interface AggregatedContestant {
 export async function compileLeaderboard(): Promise<AggregatedContestant[]> {
   try {
     // Read dynamic settings and weights from system config table
-    const configs = await prisma.systemConfig.findMany();
-    const configMap = new Map(configs.map(c => [c.key, c.value]));
+    const { data: configs, error: configError } = await supabase.from("SystemConfig").select("*");
+    if (configError) throw new Error(configError.message);
+    const configMap = new Map((configs || []).map(c => [c.key, c.value]));
 
     const weightWA = parseFloat(configMap.get("WEIGHT_WA_ANONYMOUS") || "0.1");
     const weightOAuth = parseFloat(configMap.get("WEIGHT_OAUTH_VERIFIED") || "1.5");
     const weightSocial = parseFloat(configMap.get("WEIGHT_SOCIAL_SYNC") || "1.0");
 
-    const contestants = await prisma.contestant.findMany({
-      include: {
-        aiScorecard: true,
-        votes: true,
-        peerBallots: true,
-      },
-    });
+    const { data: contestants, error: contestantsError } = await supabase
+      .from("Contestant")
+      .select("*, aiScorecard:AIScorecard(*), votes:PublicVote(*), peerBallots:PeerBallot(*)");
 
-    const contestantsWithWeightedVotes = contestants.map((c: any) => {
-      const aiScore = c.aiScorecard ? c.aiScorecard.overallScore : 0;
+    if (contestantsError) throw new Error(contestantsError.message);
+
+    const contestantsWithWeightedVotes = (contestants || []).map((c: any) => {
+      // Normalize relation properties to handle array or object return formats
+      const aiScorecardRaw = Array.isArray(c.aiScorecard) ? c.aiScorecard[0] : c.aiScorecard;
+      const aiScore = aiScorecardRaw ? aiScorecardRaw.overallScore : 0;
       
+      const votes = Array.isArray(c.votes) ? c.votes : [];
+      const peerBallots = Array.isArray(c.peerBallots) ? c.peerBallots : [];
+
       // Categorize votes
-      const waVotes = c.votes.filter((v: any) => v.type === "WA_ANONYMOUS");
-      const portalVotes = c.votes.filter((v: any) => v.type === "OAUTH_VERIFIED");
-      const socialVotes = c.votes.filter((v: any) => v.type === "SOCIAL_SYNC");
+      const waVotes = votes.filter((v: any) => v.type === "WA_ANONYMOUS");
+      const portalVotes = votes.filter((v: any) => v.type === "OAUTH_VERIFIED");
+      const socialVotes = votes.filter((v: any) => v.type === "SOCIAL_SYNC");
 
       // Calculate weighted fan score dynamically based on admin configurations
       const totalFanScore = 
@@ -64,8 +68,8 @@ export async function compileLeaderboard(): Promise<AggregatedContestant[]> {
         (socialVotes.length * weightSocial);
 
       // Average peer ballot score
-      const peerScore = c.peerBallots.length > 0
-        ? c.peerBallots.reduce((sum: number, b: any) => sum + b.compiledPeerScore, 0) / c.peerBallots.length
+      const peerScore = peerBallots.length > 0
+        ? peerBallots.reduce((sum: number, b: any) => sum + b.compiledPeerScore, 0) / peerBallots.length
         : 0;
 
       return {
@@ -79,12 +83,12 @@ export async function compileLeaderboard(): Promise<AggregatedContestant[]> {
         styleTag: c.styleTag,
         aiScore,
         peerScore,
-        votesCount: c.votes.length,
+        votesCount: votes.length,
         waVotesCount: waVotes.length,
         portalVotesCount: portalVotes.length,
         socialLikesCount: socialVotes.length,
         totalFanScore: parseFloat(totalFanScore.toFixed(2)),
-        aiScorecard: c.aiScorecard,
+        aiScorecard: aiScorecardRaw || null,
       };
     });
 

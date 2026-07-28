@@ -1,6 +1,6 @@
 // src/app/vote/[slug]/page.tsx
 import React from "react";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { headers } from "next/headers";
 import VotingClient from "@/components/VotingClient";
 import Link from "next/link";
@@ -17,10 +17,16 @@ export default async function VotePage({ params }: PageProps) {
   const { slug } = await params;
 
   // Retrieve contestant by dynamic slug
-  const contestant = await prisma.contestant.findUnique({
-    where: { publicVotingSlug: slug },
-    include: { aiScorecard: true },
-  });
+  const { data: contestantRaw } = await supabase
+    .from("Contestant")
+    .select("*, aiScorecard:AIScorecard(*)")
+    .eq("publicVotingSlug", slug)
+    .maybeSingle();
+
+  const contestant = contestantRaw ? {
+    ...contestantRaw,
+    aiScorecard: Array.isArray(contestantRaw.aiScorecard) ? contestantRaw.aiScorecard[0] : contestantRaw.aiScorecard
+  } : null;
 
   // If contestant doesn't exist, display a clean 404 alert page
   if (!contestant) {

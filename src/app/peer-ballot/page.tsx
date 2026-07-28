@@ -1,6 +1,6 @@
 // src/app/peer-ballot/page.tsx
 import React from "react";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import PeerBallotClient from "@/components/PeerBallotClient";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -9,24 +9,22 @@ export const dynamic = "force-dynamic";
 
 export default async function PeerBallotPage() {
   // Fetch only Top 16 competitors registered in the platform
-  const competitors = await prisma.contestant.findMany({
-    where: { isTop16: true, status: "READY" },
-    select: {
-      id: true,
-      name: true,
-      city: true,
-      videoUrl: true,
-    },
-    orderBy: { name: "asc" },
-  });
+  const { data: competitorsRaw } = await supabase
+    .from("Contestant")
+    .select("id, name, city, videoUrl")
+    .eq("isTop16", true)
+    .eq("status", "READY")
+    .order("name", { ascending: true });
+
+  const competitors = competitorsRaw || [];
 
   // Fetch all active access codes from database
-  const activeCodes = await prisma.accessCode.findMany({
-    where: { active: true },
-    select: { code: true },
-  });
+  const { data: activeCodesRaw } = await supabase
+    .from("AccessCode")
+    .select("code")
+    .eq("active", true);
 
-  const validTokens = activeCodes.map((ac: any) => ac.code.toUpperCase());
+  const validTokens = (activeCodesRaw || []).map((ac: any) => ac.code.toUpperCase());
 
   return (
     <div className="flex-1 py-12">

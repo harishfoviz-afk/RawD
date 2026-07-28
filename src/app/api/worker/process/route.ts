@@ -1,6 +1,6 @@
 // src/app/api/worker/process/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { compileScorecard } from "@/lib/scoringEngine";
 import fs from "fs";
 import path from "path";
@@ -25,28 +25,32 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Query for oldest PENDING_AI candidate
-    const candidate = await prisma.contestant.findFirst({
-      where: { status: "PENDING_AI" },
-      orderBy: { createdAt: "asc" },
-    });
+    const { data: candidate, error: queryError } = await supabase
+      .from("Contestant")
+      .select("*")
+      .eq("status", "PENDING_AI")
+      .order("createdAt", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (queryError) throw new Error(queryError.message);
 
     if (!candidate) {
       return NextResponse.json({ success: true, message: "No pending jobs found." });
     }
 
-    // 3. Atomically lock candidate using updateMany to prevent race conditions
-    const updateResult = await prisma.contestant.updateMany({
-      where: {
-        id: candidate.id,
-        status: "PENDING_AI",
-      },
-      data: {
-        status: "PROCESSING",
-      },
-    });
+    // 3. Atomically lock candidate using update to prevent race conditions
+    const { data: updateResult, error: updateError } = await supabase
+      .from("Contestant")
+      .update({ status: "PROCESSING" })
+      .eq("id", candidate.id)
+      .eq("status", "PENDING_AI")
+      .select();
 
-    if (updateResult.count === 0) {
-      return NextResponse.json({ success: false, error: "Job already acquired by another worker worker thread." }, { status: 409 });
+    if (updateError) throw new Error(updateError.message);
+
+    if (!updateResult || updateResult.length === 0) {
+      return NextResponse.json({ success: false, error: "Job already acquired by another worker thread." }, { status: 409 });
     }
 
     console.log(`[worker] Acquired lock for candidate: ${candidate.name} (${candidate.id})`);
@@ -74,16 +78,33 @@ export async function POST(req: NextRequest) {
       console.log(`[worker] Deepfake check flag matched locally via file name keywords.`);
     }
 
-    // Contact FastAPI server for real audio transient sync alignment if video file is on disk
+    // Contact FastAPI server for real audio transient sync alignment
     try {
-      const relativePath = candidate.videoUrl; // E.g., "/uploads/my-video.mp4"
-      const absolutePath = path.resolve(process.cwd(), `public${relativePath}`);
+      let fileBuffer: Buffer | null = null;
+      let filename = "";
 
-      if (fs.existsSync(absolutePath)) {
-        console.log(`[worker] Found physical video file at: ${absolutePath}. Triggering Librosa analysis...`);
-        const fileBuffer = fs.readFileSync(absolutePath);
-        const fileBlob = new Blob([fileBuffer], { type: "video/mp4" });
-        const uploadFile = new File([fileBlob], path.basename(absolutePath), { type: "video/mp4" });
+      if (candidate.videoUrl.startsWith("http://") || candidate.videoUrl.startsWith("https://")) {
+        console.log(`[worker] Fetching video from remote storage: ${candidate.videoUrl}`);
+        const res = await fetch(candidate.videoUrl);
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          fileBuffer = Buffer.from(arrayBuffer);
+          const urlParts = candidate.videoUrl.split("/");
+          filename = urlParts[urlParts.length - 1];
+        }
+      } else {
+        const relativePath = candidate.videoUrl; // E.g., "/uploads/my-video.mp4"
+        const absolutePath = path.resolve(process.cwd(), `public${relativePath}`);
+        if (fs.existsSync(absolutePath)) {
+          fileBuffer = fs.readFileSync(absolutePath);
+          filename = path.basename(absolutePath);
+        }
+      }
+
+      if (fileBuffer) {
+        console.log(`[worker] Found video file: ${filename}. Triggering Librosa analysis...`);
+        const fileBlob = new Blob([new Uint8Array(fileBuffer)], { type: "video/mp4" });
+        const uploadFile = new File([fileBlob], filename, { type: "video/mp4" });
 
         const formData = new FormData();
         formData.append("file", uploadFile);
@@ -112,7 +133,7 @@ export async function POST(req: NextRequest) {
           console.warn("[worker] FastAPI returned error status. Falling back to default timing_score.");
         }
       } else {
-        console.warn(`[worker] Physical video file not found at: ${absolutePath}. Using simulated timing_score.`);
+        console.warn(`[worker] Video file not accessible. Using simulated timing_score.`);
       }
     } catch (err) {
       console.error("[worker] Error communicating with Librosa microservice:", err);
@@ -134,38 +155,31 @@ export async function POST(req: NextRequest) {
       scorecardData.feedbackSummary = "Status: Rejected. This clip was identified as synthetic or AI-generated. The competition rules require raw, organic physical footage.";
     }
 
-    // Save scorecard and update contestant status inside database in transaction
-    await prisma.$transaction([
-      prisma.aIScorecard.upsert({
-        where: { contestantId: candidate.id },
-        update: {
-          styleGroup: scorecardData.styleGroup,
-          sharpnessScore,
-          alignmentScore,
-          timingScore,
-          stabilityScore,
-          overallScore: scorecardData.overallScore,
-          feedbackSummary: scorecardData.feedbackSummary,
-        },
-        create: {
-          contestantId: candidate.id,
-          styleGroup: scorecardData.styleGroup,
-          sharpnessScore,
-          alignmentScore,
-          timingScore,
-          stabilityScore,
-          overallScore: scorecardData.overallScore,
-          feedbackSummary: scorecardData.feedbackSummary,
-        },
-      }),
-      prisma.contestant.update({
-        where: { id: candidate.id },
-        data: {
-          status: "READY",
-          isAiGenerated: isAiGeneratedVideo,
-        },
-      }),
-    ]);
+    // Save scorecard and update contestant status inside database
+    const { error: upsertError } = await supabase
+      .from("AIScorecard")
+      .upsert({
+        contestantId: candidate.id,
+        styleGroup: scorecardData.styleGroup,
+        sharpnessScore,
+        alignmentScore,
+        timingScore,
+        stabilityScore,
+        overallScore: scorecardData.overallScore,
+        feedbackSummary: scorecardData.feedbackSummary,
+      });
+
+    if (upsertError) throw new Error(upsertError.message);
+
+    const { error: updateContestantError } = await supabase
+      .from("Contestant")
+      .update({
+        status: "READY",
+        isAiGenerated: isAiGeneratedVideo,
+      })
+      .eq("id", candidate.id);
+
+    if (updateContestantError) throw new Error(updateContestantError.message);
 
     const duration = Date.now() - startTime;
     console.log(`[worker] Completed scoring for contestant ${candidate.name} in ${duration}ms`);
@@ -179,8 +193,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("[worker] Background execution exception:", error);
-    
-    // Attempt to set status to FAILED_AI if candidate is locked
     return NextResponse.json({
       success: false,
       error: error.message || "Background worker execution failed",

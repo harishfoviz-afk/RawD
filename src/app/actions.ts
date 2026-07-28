@@ -1,7 +1,7 @@
 // src/app/actions.ts
 "use server";
 
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
 // Helper to generate a unique voting slug
@@ -39,16 +39,19 @@ export async function onboardContestant(formData: {
 
     // Ensure uniqueness of slug
     while (true) {
-      const existing = await prisma.contestant.findUnique({
-        where: { publicVotingSlug },
-      });
+      const { data: existing } = await supabase
+        .from("Contestant")
+        .select("id")
+        .eq("publicVotingSlug", publicVotingSlug)
+        .maybeSingle();
       if (!existing) break;
       count++;
       publicVotingSlug = `${baseSlug}-${count}-${Math.floor(Math.random() * 1000)}`;
     }
 
-    const contestant = await prisma.contestant.create({
-      data: {
+    const { data: contestant, error } = await supabase
+      .from("Contestant")
+      .insert({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
@@ -57,8 +60,11 @@ export async function onboardContestant(formData: {
         publicVotingSlug,
         status: "PENDING_AI",
         styleTag: styleTagUpper,
-      },
-    });
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
 
     revalidatePath("/");
     revalidatePath("/admin");
@@ -67,7 +73,7 @@ export async function onboardContestant(formData: {
     console.error("Onboarding failed:", error);
     return {
       success: false,
-      error: error.code === "P2002" ? "Email already registered for this competition" : error.message || "Onboarding failed",
+      error: error.message || "Onboarding failed",
     };
   }
 }
@@ -83,18 +89,9 @@ export async function saveAIScorecard(data: {
   feedbackSummary: string;
 }) {
   try {
-    const scorecard = await prisma.aIScorecard.upsert({
-      where: { contestantId: data.contestantId },
-      update: {
-        styleGroup: data.styleGroup,
-        sharpnessScore: data.sharpnessScore,
-        alignmentScore: data.alignmentScore,
-        timingScore: data.timingScore,
-        stabilityScore: data.stabilityScore,
-        overallScore: data.overallScore,
-        feedbackSummary: data.feedbackSummary,
-      },
-      create: {
+    const { data: scorecard, error: upsertError } = await supabase
+      .from("AIScorecard")
+      .upsert({
         contestantId: data.contestantId,
         styleGroup: data.styleGroup,
         sharpnessScore: data.sharpnessScore,
@@ -103,14 +100,19 @@ export async function saveAIScorecard(data: {
         stabilityScore: data.stabilityScore,
         overallScore: data.overallScore,
         feedbackSummary: data.feedbackSummary,
-      },
-    });
+      })
+      .select()
+      .single();
+
+    if (upsertError) throw new Error(upsertError.message);
 
     // Update contestant status
-    await prisma.contestant.update({
-      where: { id: data.contestantId },
-      data: { status: "SCORING_COMPLETE" },
-    });
+    const { error: updateError } = await supabase
+      .from("Contestant")
+      .update({ status: "SCORING_COMPLETE" })
+      .eq("id", data.contestantId);
+
+    if (updateError) throw new Error(updateError.message);
 
     revalidatePath("/");
     revalidatePath("/admin");
@@ -125,27 +127,29 @@ export async function saveAIScorecard(data: {
 export async function castVote(contestantId: string, voterIp: string) {
   try {
     // 1. Check if voter already voted for this dancer
-    const existing = await prisma.publicVote.findFirst({
-      where: {
-        contestantId,
-        voterIp,
-        voterIdentifier: null,
-      },
-    });
+    const { data: existing } = await supabase
+      .from("PublicVote")
+      .select("id")
+      .eq("contestantId", contestantId)
+      .eq("voterIp", voterIp)
+      .is("voterIdentifier", null)
+      .maybeSingle();
 
     if (existing) {
       return { success: false, error: "You have already cast a vote for this dancer!" };
     }
 
     // 2. Create vote
-    await prisma.publicVote.create({
-      data: {
+    const { error } = await supabase
+      .from("PublicVote")
+      .insert({
         contestantId,
         voterIp,
         type: "WA_ANONYMOUS",
         weight: 1.0,
-      },
-    });
+      });
+
+    if (error) throw new Error(error.message);
 
     revalidatePath("/admin");
     revalidatePath("/");
@@ -167,33 +171,21 @@ export async function submitPeerBallot(data: {
 }) {
   try {
     // 1. Validate Token Checkpoint
-    const activeToken = await prisma.accessCode.findFirst({
-      where: {
-        code: data.evaluatorPeerId,
-        active: true,
-      },
-    });
+    const { data: activeToken } = await supabase
+      .from("AccessCode")
+      .select("*")
+      .eq("code", data.evaluatorPeerId)
+      .eq("active", true)
+      .maybeSingle();
 
     if (!activeToken) {
       return { success: false, error: "Access Denied: Invalid or revoked peer evaluation token" };
     }
 
-    // 2. Save Ballot
-    const ballot = await prisma.peerBallot.upsert({
-      where: {
-        targetContestantId_evaluatorPeerId: {
-          targetContestantId: data.targetContestantId,
-          evaluatorPeerId: data.evaluatorPeerId,
-        },
-      },
-      update: {
-        musicalityScore: data.musicalityScore,
-        executionScore: data.executionScore,
-        energyScore: data.energyScore,
-        presenceScore: data.presenceScore,
-        compiledPeerScore: data.compiledPeerScore,
-      },
-      create: {
+    // 2. Save Ballot using conflict handling for the composite constraint
+    const { data: ballot, error: upsertError } = await supabase
+      .from("PeerBallot")
+      .upsert({
         targetContestantId: data.targetContestantId,
         evaluatorPeerId: data.evaluatorPeerId,
         musicalityScore: data.musicalityScore,
@@ -201,8 +193,13 @@ export async function submitPeerBallot(data: {
         energyScore: data.energyScore,
         presenceScore: data.presenceScore,
         compiledPeerScore: data.compiledPeerScore,
-      },
-    });
+      }, {
+        onConflict: "targetContestantId,evaluatorPeerId"
+      })
+      .select()
+      .single();
+
+    if (upsertError) throw new Error(upsertError.message);
 
     revalidatePath("/admin");
     return { success: true, ballot };
@@ -215,16 +212,21 @@ export async function submitPeerBallot(data: {
 // Token Administration
 export async function issueAccessCode(code: string) {
   try {
-    const existing = await prisma.accessCode.findUnique({ where: { code } });
+    const { data: existing } = await supabase
+      .from("AccessCode")
+      .select("*")
+      .eq("code", code)
+      .maybeSingle();
+
     if (existing) {
-      await prisma.accessCode.update({
-        where: { code },
-        data: { active: true },
-      });
+      await supabase
+        .from("AccessCode")
+        .update({ active: true })
+        .eq("code", code);
     } else {
-      await prisma.accessCode.create({
-        data: { code, active: true },
-      });
+      await supabase
+        .from("AccessCode")
+        .insert({ code, active: true });
     }
     revalidatePath("/admin");
     revalidatePath("/peer-ballot");
@@ -236,10 +238,11 @@ export async function issueAccessCode(code: string) {
 
 export async function revokeAccessCode(code: string) {
   try {
-    await prisma.accessCode.update({
-      where: { code },
-      data: { active: false },
-    });
+    await supabase
+      .from("AccessCode")
+      .update({ active: false })
+      .eq("code", code);
+
     revalidatePath("/admin");
     revalidatePath("/peer-ballot");
     return { success: true };
@@ -250,9 +253,11 @@ export async function revokeAccessCode(code: string) {
 
 export async function getAccessCodes() {
   try {
-    return await prisma.accessCode.findMany({
-      orderBy: { createdAt: "desc" },
-    });
+    const { data } = await supabase
+      .from("AccessCode")
+      .select("*")
+      .order("createdAt", { ascending: false });
+    return data || [];
   } catch (error) {
     return [];
   }
@@ -274,9 +279,14 @@ export async function seedInitialTokens() {
   try {
     const defaultCodes = ["JUDGE-SHARP", "JUDGE-FLUID", "JUDGE-LIVE", "PEER-BALLOT-2026"];
     for (const code of defaultCodes) {
-      const existing = await prisma.accessCode.findUnique({ where: { code } });
+      const { data: existing } = await supabase
+        .from("AccessCode")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+
       if (!existing) {
-        await prisma.accessCode.create({ data: { code, active: true } });
+        await supabase.from("AccessCode").insert({ code, active: true });
       }
     }
   } catch (err) {
@@ -286,11 +296,12 @@ export async function seedInitialTokens() {
 
 export async function saveSystemConfig(key: string, value: string) {
   try {
-    await prisma.systemConfig.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value },
-    });
+    await supabase
+      .from("SystemConfig")
+      .upsert({ key, value })
+      .select()
+      .single();
+
     revalidatePath("/admin");
     return { success: true };
   } catch (error: any) {
@@ -300,7 +311,8 @@ export async function saveSystemConfig(key: string, value: string) {
 
 export async function getSystemConfigs() {
   try {
-    return await prisma.systemConfig.findMany();
+    const { data } = await supabase.from("SystemConfig").select("*");
+    return data || [];
   } catch (error) {
     return [];
   }
@@ -308,21 +320,28 @@ export async function getSystemConfigs() {
 
 export async function toggleTop16(contestantId: string, isTop16: boolean) {
   try {
-    const contestant = await prisma.contestant.update({
-      where: { id: contestantId },
-      data: { isTop16 },
-    });
-    
+    const { data: contestant, error } = await supabase
+      .from("Contestant")
+      .update({ isTop16 })
+      .eq("id", contestantId)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
     // If marked as Top 16, automatically generate/seed their peer code
-    if (isTop16) {
+    if (isTop16 && contestant) {
       const code = `${contestant.name.toUpperCase().replace(/\s+/g, "")}-TOP16`;
-      const existing = await prisma.accessCode.findUnique({ where: { code } });
+      const { data: existing } = await supabase
+        .from("AccessCode")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+
       if (!existing) {
-        await prisma.accessCode.create({
-          data: {
-            code,
-            active: false, // Inactive by default until "Trigger Access" is clicked
-          }
+        await supabase.from("AccessCode").insert({
+          code,
+          active: false, // Inactive by default until "Trigger Access" is clicked
         });
       }
     }
@@ -337,18 +356,19 @@ export async function toggleTop16(contestantId: string, isTop16: boolean) {
 
 export async function overrideVideo(contestantId: string, newVideoUrl: string) {
   try {
-    const current = await prisma.contestant.findUnique({
-      where: { id: contestantId },
-      select: { videoUrl: true }
-    });
-    
-    await prisma.contestant.update({
-      where: { id: contestantId },
-      data: {
-        originalVideoUrl: current?.videoUrl,
+    const { data: current } = await supabase
+      .from("Contestant")
+      .select("videoUrl")
+      .eq("id", contestantId)
+      .single();
+
+    await supabase
+      .from("Contestant")
+      .update({
+        originalVideoUrl: current?.videoUrl || null,
         videoUrl: newVideoUrl,
-      }
-    });
+      })
+      .eq("id", contestantId);
 
     revalidatePath("/admin");
     revalidatePath("/");
@@ -360,23 +380,10 @@ export async function overrideVideo(contestantId: string, newVideoUrl: string) {
 
 export async function launchLeague(leagueName: string, leagueDesc: string, launch: boolean) {
   try {
-    await prisma.$transaction([
-      prisma.systemConfig.upsert({
-        where: { key: "LEAGUE_LAUNCHED" },
-        update: { value: launch ? "true" : "false" },
-        create: { key: "LEAGUE_LAUNCHED", value: launch ? "true" : "false" },
-      }),
-      prisma.systemConfig.upsert({
-        where: { key: "LEAGUE_NAME" },
-        update: { value: leagueName },
-        create: { key: "LEAGUE_NAME", value: leagueName },
-      }),
-      prisma.systemConfig.upsert({
-        where: { key: "LEAGUE_DESC" },
-        update: { value: leagueDesc },
-        create: { key: "LEAGUE_DESC", value: leagueDesc },
-      })
-    ]);
+    // Run updates sequentially
+    await supabase.from("SystemConfig").upsert({ key: "LEAGUE_LAUNCHED", value: launch ? "true" : "false" });
+    await supabase.from("SystemConfig").upsert({ key: "LEAGUE_NAME", value: leagueName });
+    await supabase.from("SystemConfig").upsert({ key: "LEAGUE_DESC", value: leagueDesc });
 
     revalidatePath("/admin");
     revalidatePath("/");
@@ -389,18 +396,16 @@ export async function launchLeague(leagueName: string, leagueDesc: string, launc
 export async function triggerPeerAccess(active: boolean) {
   try {
     // Find all Top 16 access codes and activate/deactivate them
-    const contestants = await prisma.contestant.findMany({
-      where: { isTop16: true },
-      select: { name: true }
-    });
+    const { data: contestants } = await supabase
+      .from("Contestant")
+      .select("name")
+      .eq("isTop16", true);
 
-    for (const c of contestants) {
-      const code = `${c.name.toUpperCase().replace(/\s+/g, "")}-TOP16`;
-      await prisma.accessCode.upsert({
-        where: { code },
-        update: { active },
-        create: { code, active },
-      });
+    if (contestants) {
+      for (const c of contestants) {
+        const code = `${c.name.toUpperCase().replace(/\s+/g, "")}-TOP16`;
+        await supabase.from("AccessCode").upsert({ code, active });
+      }
     }
 
     revalidatePath("/admin");
@@ -413,13 +418,15 @@ export async function triggerPeerAccess(active: boolean) {
 
 export async function pushVideoToYouTube(contestantId: string) {
   try {
-    const c = await prisma.contestant.findUnique({
-      where: { id: contestantId },
-      select: { name: true }
-    });
+    const { data: c } = await supabase
+      .from("Contestant")
+      .select("name")
+      .eq("id", contestantId)
+      .single();
+
     // Simulate push, return random mock ID
     const youtubeId = `yt-${Math.random().toString(36).substring(2, 11)}`;
-    console.log(`[youtubeSync] Pushed ${c?.name}'s video clip to YouTube with ID: ${youtubeId}`);
+    console.log(`[youtubeSync] Pushed ${c?.name || "Unknown contestant"}'s video clip to YouTube with ID: ${youtubeId}`);
     return { success: true, youtubeId };
   } catch (error: any) {
     return { success: false, error: error.message };

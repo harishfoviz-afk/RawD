@@ -1,6 +1,6 @@
 // src/app/vote/wa/[slug]/page.tsx
 import React from "react";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { Tv, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import WAVotingClient from "@/components/WAVotingClient";
@@ -15,16 +15,11 @@ export default async function WAVotePage({ params }: PageProps) {
   const { slug } = await params;
 
   // Retrieve contestant by dynamic slug
-  const contestant = await prisma.contestant.findUnique({
-    where: { publicVotingSlug: slug },
-    select: {
-      id: true,
-      name: true,
-      city: true,
-      videoUrl: true,
-      publicVotingSlug: true,
-    },
-  });
+  const { data: contestant } = await supabase
+    .from("Contestant")
+    .select("id, name, city, videoUrl, publicVotingSlug")
+    .eq("publicVotingSlug", slug)
+    .maybeSingle();
 
   if (!contestant) {
     return (

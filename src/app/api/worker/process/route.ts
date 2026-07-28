@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
     // 3. Atomically lock candidate using update to prevent race conditions
     const { data: updateResult, error: updateError } = await supabase
       .from("Contestant")
-      .update({ status: "PROCESSING" })
+      .update({ 
+        status: "PROCESSING",
+        updatedAt: new Date().toISOString(),
+      })
       .eq("id", candidate.id)
       .eq("status", "PENDING_AI")
       .select();
@@ -167,6 +170,7 @@ export async function POST(req: NextRequest) {
         stabilityScore,
         overallScore: scorecardData.overallScore,
         feedbackSummary: scorecardData.feedbackSummary,
+        updatedAt: new Date().toISOString(),
       });
 
     if (upsertError) throw new Error(upsertError.message);
@@ -176,6 +180,7 @@ export async function POST(req: NextRequest) {
       .update({
         status: "READY",
         isAiGenerated: isAiGeneratedVideo,
+        updatedAt: new Date().toISOString(),
       })
       .eq("id", candidate.id);
 

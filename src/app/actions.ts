@@ -62,6 +62,7 @@ export async function onboardContestant(formData: {
         publicVotingSlug,
         status: "PENDING_AI",
         styleTag: styleTagUpper,
+        updatedAt: new Date().toISOString(),
       })
       .select()
       .single();
@@ -102,6 +103,7 @@ export async function saveAIScorecard(data: {
         stabilityScore: data.stabilityScore,
         overallScore: data.overallScore,
         feedbackSummary: data.feedbackSummary,
+        updatedAt: new Date().toISOString(),
       })
       .select()
       .single();
@@ -111,7 +113,10 @@ export async function saveAIScorecard(data: {
     // Update contestant status
     const { error: updateError } = await supabase
       .from("Contestant")
-      .update({ status: "SCORING_COMPLETE" })
+      .update({ 
+        status: "SCORING_COMPLETE",
+        updatedAt: new Date().toISOString(),
+      })
       .eq("id", data.contestantId);
 
     if (updateError) throw new Error(updateError.message);
@@ -326,7 +331,10 @@ export async function toggleTop16(contestantId: string, isTop16: boolean) {
   try {
     const { data: contestant, error } = await supabase
       .from("Contestant")
-      .update({ isTop16 })
+      .update({ 
+        isTop16,
+        updatedAt: new Date().toISOString(),
+      })
       .eq("id", contestantId)
       .select()
       .single();
@@ -371,6 +379,7 @@ export async function overrideVideo(contestantId: string, newVideoUrl: string) {
       .update({
         originalVideoUrl: current?.videoUrl || null,
         videoUrl: newVideoUrl,
+        updatedAt: new Date().toISOString(),
       })
       .eq("id", contestantId);
 

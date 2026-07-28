@@ -11,14 +11,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "No file uploaded" }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+    let supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+    let supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("[upload] Supabase configuration is missing. Please configure it in the Admin Cockpit settings.");
+    // Strip surrounding quotes if present (common copy-paste mistake)
+    if (supabaseUrl.startsWith('"') && supabaseUrl.endsWith('"')) supabaseUrl = supabaseUrl.slice(1, -1);
+    if (supabaseUrl.startsWith("'") && supabaseUrl.endsWith("'")) supabaseUrl = supabaseUrl.slice(1, -1);
+    if (supabaseAnonKey.startsWith('"') && supabaseAnonKey.endsWith('"')) supabaseAnonKey = supabaseAnonKey.slice(1, -1);
+    if (supabaseAnonKey.startsWith("'") && supabaseAnonKey.endsWith("'")) supabaseAnonKey = supabaseAnonKey.slice(1, -1);
+
+    console.log(`[upload-diagnostics] URL length: ${supabaseUrl.length}, starts with: "${supabaseUrl.slice(0, 15)}"`);
+    console.log(`[upload-diagnostics] Key length: ${supabaseAnonKey.length}, starts with: "${supabaseAnonKey.slice(0, 15)}"`);
+
+    if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes("placeholder") || supabaseAnonKey.includes("placeholder")) {
+      console.error("[upload] Supabase configuration is missing or placeholder.");
       return NextResponse.json({ 
         success: false, 
-        error: "Supabase storage is not configured. Please set the Supabase Project URL and Anon Key in the Admin settings." 
+        error: "Supabase storage environment variables are missing or invalid." 
       }, { status: 400 });
     }
 

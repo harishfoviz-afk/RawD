@@ -125,12 +125,6 @@ export default function RegisterFormClient() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {status === "error" && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">
-          <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
 
       {/* Grid: Dancer Profile Fields */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-brand-card/45 border border-purple-500/5 rounded-2xl p-6 backdrop-blur-sm">
@@ -368,6 +362,100 @@ export default function RegisterFormClient() {
           </button>
         )}
       </div>
+
+      {/* Dynamic Progress/Error Modal Overlay */}
+      {status !== "idle" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border border-purple-500/20 bg-[#0c081d] p-8 space-y-6 text-center shadow-2xl relative overflow-hidden animate-in zoom-in duration-200">
+            <span className="absolute top-0 right-0 h-40 w-40 rounded-full bg-brand-purple/5 blur-3xl pointer-events-none"></span>
+            
+            {status === "uploading" && (
+              <div className="space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-purple/10 text-brand-cyan">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-extrabold text-white">Uploading Dance Clip</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Uploading your video file to Supabase Storage. Please do not close or refresh this page.
+                  </p>
+                </div>
+                {/* Simulated Progress bar */}
+                <div className="w-full bg-brand-dark/60 rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-gradient-to-r from-brand-purple to-brand-cyan h-full w-[45%] animate-pulse rounded-full"></div>
+                </div>
+              </div>
+            )}
+
+            {status === "registering" && (
+              <div className="space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-cyan/10 text-brand-cyan">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-extrabold text-white">Registering Audition</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Enrolling your dancer profile in the tournament database and queueing for Kinematic AI analysis.
+                  </p>
+                </div>
+                <div className="w-full bg-brand-dark/60 rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-gradient-to-r from-brand-cyan to-brand-purple h-full w-[85%] animate-pulse rounded-full"></div>
+                </div>
+              </div>
+            )}
+
+            {status === "success" && (
+              <div className="space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-emerald/10 text-brand-emerald">
+                  <Check className="h-8 w-8" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-extrabold text-white">Audition Registered!</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Redirecting you to your public voting profile...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {status === "error" && (
+              <div className="space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+                  <AlertCircle className="h-8 w-8" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-extrabold text-red-400">Submission Failed</h3>
+                  <p className="text-xs text-gray-300 font-medium leading-relaxed bg-red-500/5 border border-red-500/10 rounded-xl p-3 max-h-40 overflow-y-auto">
+                    {errorMsg}
+                  </p>
+                  
+                  {/* Context-aware suggestions */}
+                  <p className="text-[10px] text-gray-400 leading-normal pt-2">
+                    {errorMsg.toLowerCase().includes("jws") || errorMsg.toLowerCase().includes("jwt") ? (
+                      <span className="text-brand-cyan">
+                        💡 <strong>Suggestion:</strong> This error is usually caused by an <strong>invalid Supabase Anon Key</strong>. Please log into the Admin Cockpit settings and check your Supabase credentials.
+                      </span>
+                    ) : errorMsg.toLowerCase().includes("bucket") ? (
+                      <span className="text-brand-cyan">
+                        💡 <strong>Suggestion:</strong> This means the 'auditions' bucket does not exist. Please create a public bucket named 'auditions' in your Supabase storage console.
+                      </span>
+                    ) : (
+                      "Please double-check your network connection and Supabase credentials and try again."
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStatus("idle")}
+                  className="w-full rounded-xl bg-brand-dark hover:bg-brand-dark/80 border border-purple-500/15 py-3 text-xs font-bold text-white transition-colors cursor-pointer"
+                >
+                  Close & Try Again
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </form>
   );
 }

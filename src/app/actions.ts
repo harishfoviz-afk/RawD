@@ -3,6 +3,7 @@
 
 import { supabase } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import crypto from "crypto";
 
 // Helper to generate a unique voting slug
 function slugify(text: string): string {
@@ -52,6 +53,7 @@ export async function onboardContestant(formData: {
     const { data: contestant, error } = await supabase
       .from("Contestant")
       .insert({
+        id: crypto.randomUUID(),
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
@@ -143,6 +145,7 @@ export async function castVote(contestantId: string, voterIp: string) {
     const { error } = await supabase
       .from("PublicVote")
       .insert({
+        id: crypto.randomUUID(),
         contestantId,
         voterIp,
         type: "WA_ANONYMOUS",
@@ -186,6 +189,7 @@ export async function submitPeerBallot(data: {
     const { data: ballot, error: upsertError } = await supabase
       .from("PeerBallot")
       .upsert({
+        id: crypto.randomUUID(),
         targetContestantId: data.targetContestantId,
         evaluatorPeerId: data.evaluatorPeerId,
         musicalityScore: data.musicalityScore,

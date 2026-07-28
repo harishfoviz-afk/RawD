@@ -1,7 +1,7 @@
-// src/app/api/vote/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/db";
 import { headers } from "next/headers";
+import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
     const { data: vote, error: insertError } = await supabase
       .from("PublicVote")
       .insert({
+        id: crypto.randomUUID(),
         contestantId,
         voterIp,
         type,
